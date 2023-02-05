@@ -1,0 +1,18 @@
+[package]
+name = "jxufe_pch"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+base64 = "0.21.0"
+reqwest = {version = "0.11.14",features = ["socks","brotli","gzip","deflate"]}
+rand = "0.8.5"
+fancy-regex = "0.11.0"
+lazy_static = "1.4.0"
+chrono = "0.4.23"
+rust-crypto = "0.2.36"
+tokio = { version = "1.25.0", features = ["full"] }
+serde = "1.0.152"
+serde_json = "1.0.91"
