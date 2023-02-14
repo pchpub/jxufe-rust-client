@@ -1,68 +1,14 @@
 use reqwest::{header::HeaderMap, Client};
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap};
 
 pub async fn async_getwebpage(
-    client: Option<Client>,
+    client: &mut Client,
     url: &str,
-    proxy_open: bool,
-    proxy_url: &str,
-    user_agent: &str,
-    cookie: &str,
     headers: Option<HeaderMap>,
-) -> Result<(HashMap<String, String>, String, Option<Client>), ()> {
-    let mut client_builder = reqwest::Client::builder();
-    if proxy_open && proxy_url.len() != 0 {
-        client_builder = client_builder.proxy(if proxy_url.contains("://") {
-            if let Ok(value) = reqwest::Proxy::all(proxy_url) {
-                value
-            } else {
-                return Err(());
-            }
-        } else {
-            if let Ok(value) = reqwest::Proxy::all(format!("socks5://{}", proxy_url)) {
-                value
-            } else {
-                return Err(());
-            }
-        });
-    }
-    let use_exist_client = client.is_some();
-    let client_for_return = {
-        if use_exist_client {
-            client
-        } else {
-            if let Ok(value) = client_builder
-                .brotli(true)
-                .gzip(true)
-                .deflate(true)
-                .timeout(Duration::from_secs(20))
-                .user_agent(user_agent)
-                .http1_title_case_headers()
-                .build()
-            {
-                Some(value)
-            } else {
-                return Err(());
-            }
-        }  
-    };
-    let mut client = {
-        if let Some(value) = client_for_return.clone() {
-            value
-        } else {
-            return Err(());
-        }
-    }
-    .get(url);
+) -> Result<(HashMap<String, String>, String), ()> {
+    let mut client = client.get(url);
     if let Some(value) = headers {
-        client = client
-            .headers(value)
-            .header("cookie", cookie)
-            .header("Accept-Encoding", "gzip, deflate, br");
-    }else{
-        client = client
-            .header("cookie", cookie)
-            .header("Accept-Encoding", "gzip, deflate, br");
+        client = client.headers(value)
     }
     let rsp_raw_data = if let Ok(value) = client.send().await {
         value
@@ -83,72 +29,19 @@ pub async fn async_getwebpage(
     } else {
         return Err(());
     };
-    Ok((rsp_headers, rsp_body, client_for_return))
+    Ok((rsp_headers, rsp_body))
 }
 
 pub async fn async_postwebpage(
-    client: Option<Client>,
+    client: &mut Client,
     url: &str,
     content: &str,
-    proxy_open: bool,
-    proxy_url: &str,
-    user_agent: &str,
-    cookie: &str,
     headers: Option<HeaderMap>,
-) -> Result<(HashMap<String, String>, String, Option<Client>), ()> {
-    let mut client_builder = reqwest::Client::builder();
-    if proxy_open && proxy_url.len() != 0 {
-        client_builder = client_builder.proxy(if proxy_url.contains("://") {
-            if let Ok(value) = reqwest::Proxy::all(proxy_url) {
-                value
-            } else {
-                return Err(());
-            }
-        } else {
-            if let Ok(value) = reqwest::Proxy::all(format!("socks5://{}", proxy_url)) {
-                value
-            } else {
-                return Err(());
-            }
-        });
-    }
-    let use_exist_client = client.is_some();
-    let client_for_return = {
-        if use_exist_client {
-            client
-        } else {
-            if let Ok(value) = client_builder
-                .brotli(true)
-                .gzip(true)
-                .deflate(true)
-                .timeout(Duration::from_secs(20))
-                .user_agent(user_agent)
-                .http1_title_case_headers()
-                .build()
-            {
-                Some(value)
-            } else {
-                return Err(());
-            }
-        }
-    };
-
-    let mut client = {
-        if let Some(value) = client_for_return.clone() {
-            value
-        }else{
-            return Err(());
-        }
-    }
-    .post(url)
-    .body(content.to_owned());
+) -> Result<(HashMap<String, String>, String), ()> {
+    let mut client = client.post(url).body(content.to_owned());
     if let Some(value) = headers {
         client = client.headers(value);
     }
-    client = client
-        .header("Cookie", cookie)
-        .header("Accept-Encoding", "gzip, deflate, br");
-    // .header("Content-Type", "application/x-www-form-urlencoded");
     let rsp_raw_data = if let Ok(value) = client.send().await {
         value
     } else {
@@ -169,5 +62,5 @@ pub async fn async_postwebpage(
     } else {
         return Err(());
     };
-    Ok((rsp_headers, rsp_body, client_for_return))
+    Ok((rsp_headers, rsp_body))
 }

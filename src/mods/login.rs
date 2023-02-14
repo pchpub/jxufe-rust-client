@@ -1,109 +1,46 @@
-use super::request::async_getwebpage;
+use super::{request::async_getwebpage, types::JxufeClient};
 use crate::mods::{request::async_postwebpage, types::LoginError};
 use base64::prelude::*;
 use fancy_regex::Regex;
 use lazy_static::lazy_static;
-use rand::Rng;
-use reqwest::{
-    header::{HeaderMap, HeaderValue},
-    Client,
-};
-use tokio::{fs::File, io::AsyncWriteExt};
-// use tokio::time::sleep;
+use reqwest::Client;
 
-pub async fn login(username: &str, password: &str) -> Result<(String,Client), LoginError> {
+pub async fn login(client: &mut JxufeClient) -> Result<(), LoginError> {
     // rename from *checkrand()
     // 输入信息验证
-    if username == "" {
-        println!("请输入用户名！");
-        return Err(LoginError::InvalidUsername);
-    } else if password == "" {
-        println!("请输入密码！");
-        return Err(LoginError::InvalidPassword);
+    match client.check_login_info() {
+        Err(value) => return Err(value),
+        Ok(_) => (),
     }
 
-    // 验证码正确性验证
-
-    let _token = password;
+    let _token = &client.password;
     let randnumber = "";
-    let password_policy = is_password_policy(username, password)?;
+    let password_policy = is_password_policy(&client.username, &client.password)?;
     let url = "https://jwxt.jxufe.edu.cn/cas/logon.action".to_owned();
-    let txt_mm_expression = get_txt_mm_expression(password)?;
-    let txt_mm_length = password.len();
-    let txt_mm_userzh = get_txt_mm_userzh(password, username)?;
+    let txt_mm_expression = get_txt_mm_expression(&client.password)?;
+    let txt_mm_length = &client.password.len();
+    let txt_mm_userzh = get_txt_mm_userzh(&client.password, &client.username)?;
     let hid_flag = "1";
     let p_username = "_u".to_owned() + randnumber;
     let p_password = "_p".to_owned() + randnumber;
 
     // 获取sessionid
-    let user_agent = get_random_useragent();
-    // let user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36".to_owned();
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        "Accept",
-        HeaderValue::from_static("text/plain, */*; q=0.01"),
-    );
-    headers.insert("Accept-Language", HeaderValue::from_static("zh-TH,zh;q=0.9,en-TH;q=0.8,en;q=0.7,th-TH;q=0.6,th;q=0.5,zh-SG;q=0.4,ja-JP;q=0.3,ja;q=0.2,zh-CN;q=0.1"));
-    headers.insert(
-        "Content-Type",
-        HeaderValue::from_static("application/x-www-form-urlencoded; charset=UTF-8"),
-    );
-    headers.insert(
-        "Origin",
-        HeaderValue::from_static("https://jwxt.jxufe.edu.cn"),
-    );
-    headers.insert(
-        "Referer",
-        HeaderValue::from_static("https://jwxt.jxufe.edu.cn/cas/login.action"),
-    );
-    headers.insert(
-        "sec-ch-ua",
-        HeaderValue::from_static(
-            r#""Chromium";v="112", "Google Chrome";v="112", "Not:A-Brand";v="99""#,
-        ),
-    );
-    headers.insert("sec-ch-ua-mobile", HeaderValue::from_static("?0"));
-    headers.insert(
-        "sec-ch-ua-platform",
-        HeaderValue::from_static(r#""Windows""#),
-    );
-    headers.insert("sec-fetch-dest", HeaderValue::from_static("empty"));
-    headers.insert("sec-fetch-mode", HeaderValue::from_static("cors"));
-    headers.insert("sec-fetch-site", HeaderValue::from_static("same-origin"));
-    headers.insert("User-Agent", HeaderValue::from_str(&user_agent).unwrap());
-    headers.insert(
-        "X-Requested-With",
-        HeaderValue::from_static("XMLHttpRequest"),
-    );
-
-    let mut client = None;
 
     let web_page = async_getwebpage(
-        client,
+        &mut client.client,
         "https://jwxt.jxufe.edu.cn/cas/login.action",
-        false,
-        "",
-        &user_agent,
-        "",
-        Some(headers.clone()),
+        None,
     )
     .await?;
-    client = web_page.2;
-
-    // println!("{}", web_page.1);
-    let mut log = File::create("log.txt").await.unwrap();
-    log.write_all(web_page.1.as_bytes()).await.unwrap();
 
     let sessionid: String;
     let cookie = {
-        // println!("{:?}",web_page.0);
         let temp = web_page.0.get("set-cookie").unwrap();
         let jsessionid: Regex = Regex::new(r#"JSESSIONID=(?P<jsessionid>[A-Z0-9]*);"#).unwrap();
         if let Some(value) = jsessionid.captures(temp).unwrap().and_then(|cap| {
             cap.name("jsessionid")
                 .map(|jsessionid| jsessionid.as_str().to_string())
         }) {
-            // let value = "368B3A3091FBE19E555360547986814B".to_owned(); // Debug
             sessionid = value.clone();
             format!("JSESSIONID={}", value)
         } else {
@@ -111,42 +48,32 @@ pub async fn login(username: &str, password: &str) -> Result<(String,Client), Lo
         }
     };
 
-    // let sessionid = get_session_id(&web_page.1)?;
-    let username = BASE64_STANDARD.encode(format!(r#"{};;{}"#, username, sessionid));
-    let password = md5(&(md5(password) + &md5(&randnumber.to_lowercase())));
-    // println!("[Debug] password: {}", password);
+    client.set_cookie(&cookie);
+
+    let username = BASE64_STANDARD.encode(format!(r#"{};;{}"#, &client.username, sessionid));
+    let password = md5(&(md5(&client.password) + &md5(&randnumber.to_lowercase())));
     let mut params = format!("{p_username}={username}&{p_password}={password}&randnumber={randnumber}&isPasswordPolicy={password_policy}&txt_mm_expression={txt_mm_expression}&txt_mm_length={txt_mm_length}&txt_mm_userzh={txt_mm_userzh}&hid_flag={hid_flag}&hidlag=1");
-    // println!("[Debug] params: {}", params);
     let deskey: String;
     let nowtime: String;
-    (deskey, nowtime, client) = get_setkingoencypt_body(
-        client,
-        &get_setkingoencypt_id(&web_page.1)?,
-        &user_agent,
-        &cookie,
-    )
-    .await?;
-    // let (deskey,nowtime) = ("2651675599645945401","2023-02-05 20:20:45"); // Debug
+    (deskey, nowtime) =
+        get_setkingoencypt_body(&mut client.client, &get_setkingoencypt_id(&web_page.1)?).await?;
     params = get_enc_params(&params, &deskey, &nowtime)?;
-    // println!("[Debug] params: {}", params);
-    // println!("{}", cookie);
-    // sleep(std::time::Duration::from_secs(3)).await;
-    let login_result = async_postwebpage(
-        client,
-        &url,
-        &params,
-        false,
-        "",
-        &user_agent,
-        &cookie,
-        Some(headers),
-    )
-    .await
-    .unwrap();
-    client = login_result.2;
-    // println!("{}", login_result.1);
+    let login_result = async_postwebpage(&mut client.client, &url, &params, None)
+        .await
+        .unwrap();
 
-    Ok((sessionid,client.unwrap()))
+    // todo: check
+    let login_result: serde_json::Value =
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&login_result.1) {
+            value
+        } else {
+            return Err(LoginError::OtherError);
+        };
+    if login_result["status"].as_str().unwrap_or("") != "200" {
+        return Err(LoginError::OtherError);
+    }
+
+    Ok(())
 }
 
 fn get_txt_mm_expression(password: &str) -> Result<usize, ()> {
@@ -208,19 +135,6 @@ fn is_password_policy(username: &str, password: &str) -> Result<usize, ()> {
 // 	}
 // }
 
-fn get_random_useragent() -> String {
-    let useragents = vec![
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0	Firefox 90.0",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.164 Safari/537.36",
-    ];
-    let mut rng = rand::thread_rng();
-    let index = rng.gen_range(0..useragents.len());
-    useragents[index].to_string()
-}
-
 // fn get_session_id(web_page_body: &str) -> Result<String, ()> {
 //     lazy_static! {
 //         static ref SESSION_ID: Regex =
@@ -255,19 +169,12 @@ fn get_setkingoencypt_id(web_page_body: &str) -> Result<String, ()> {
     }
 }
 
-async fn get_setkingoencypt_body(
-    client: Option<Client>,
-    id: &str,
-    user_agent: &str,
-    cookie: &str,
-) -> Result<(String, String, Option<Client>), ()> {
+async fn get_setkingoencypt_body(client: &mut Client, id: &str) -> Result<(String, String), ()> {
     let url = format!(
         "https://jwxt.jxufe.edu.cn/custom/js/SetKingoEncypt.jsp?t={}",
         id
     );
-    println!("[Debug] cookie: {}",cookie);
-    let (_, body, client) =
-        async_getwebpage(client, &url, false, "", user_agent, cookie, None).await?;
+    let (_, body) = async_getwebpage(client, &url, None).await?;
     lazy_static! {
         //var _deskey = '6511675486548812258';
         // var _nowtime = '2023-02-04 12:55:48';
@@ -291,7 +198,7 @@ async fn get_setkingoencypt_body(
     } else {
         return Err(());
     };
-    Ok((deskey, nowtime, client))
+    Ok((deskey, nowtime))
 }
 
 fn get_enc_params(params: &str, deskey: &str, timestamp: &str) -> Result<String, ()> {
