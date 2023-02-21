@@ -1,4 +1,4 @@
-use jxufe_pch::mods::{login::login, types::JxufeClient};
+use jxufe_pch::mods::types::JxufeClient;
 
 #[tokio::main]
 async fn main() {
@@ -15,5 +15,5 @@ async fn main() {
         }
     };
 
-    login(&mut client).await.unwrap();
+    client.login().await.unwrap();
 }

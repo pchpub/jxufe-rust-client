@@ -1,6 +1,6 @@
 use std::{error::Error, fmt};
 
-use super::build_client::build_request;
+use super::{build_client::build_request, getinfo::login::login};
 
 #[derive(Debug)]
 pub enum LoginError {
@@ -86,5 +86,9 @@ impl JxufeClient {
             return Err(LoginError::InvalidPassword);
         }
         Ok(())
+    }
+
+    pub async fn login(&mut self) -> Result<(), LoginError> {
+        login(self).await
     }
 }
