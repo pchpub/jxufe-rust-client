@@ -2,11 +2,11 @@ use reqwest::{header::HeaderMap, Client};
 use std::{collections::HashMap};
 
 pub async fn async_getwebpage(
-    client: &mut Client,
+    raw_client: &mut Client,
     url: &str,
     headers: Option<HeaderMap>,
 ) -> Result<(HashMap<String, String>, String), ()> {
-    let mut client = client.get(url);
+    let mut client = raw_client.get(url);
     if let Some(value) = headers {
         client = client.headers(value)
     }

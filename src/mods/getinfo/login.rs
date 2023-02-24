@@ -1,8 +1,7 @@
-use crate::mods::{request::{async_postwebpage, async_getwebpage}, types::{LoginError, JxufeClient}};
+use crate::mods::types::{JxufeClient, LoginError};
 use base64::prelude::*;
 use fancy_regex::Regex;
 use lazy_static::lazy_static;
-use reqwest::Client;
 
 pub async fn login(client: &mut JxufeClient) -> Result<(), LoginError> {
     // rename from *checkrand()
@@ -25,12 +24,9 @@ pub async fn login(client: &mut JxufeClient) -> Result<(), LoginError> {
 
     // 获取sessionid
 
-    let web_page = async_getwebpage(
-        &mut client.client,
-        "https://jwxt.jxufe.edu.cn/cas/login.action",
-        None,
-    )
-    .await?;
+    let web_page = client
+        .async_getwebpage("https://jwxt.jxufe.edu.cn/cas/login.action", None)
+        .await?;
 
     let sessionid: String;
     let cookie = {
@@ -55,11 +51,9 @@ pub async fn login(client: &mut JxufeClient) -> Result<(), LoginError> {
     let deskey: String;
     let nowtime: String;
     (deskey, nowtime) =
-        get_setkingoencypt_body(&mut client.client, &get_setkingoencypt_id(&web_page.1)?).await?;
+        get_setkingoencypt_body(client, &get_setkingoencypt_id(&web_page.1)?).await?;
     params = get_enc_params(&params, &deskey, &nowtime)?;
-    let login_result = async_postwebpage(&mut client.client, &url, &params, None)
-        .await
-        .unwrap();
+    let login_result = client.async_postwebpage(&url, None, &params).await.unwrap();
 
     // todo: check
     let login_result: serde_json::Value =
@@ -168,12 +162,15 @@ fn get_setkingoencypt_id(web_page_body: &str) -> Result<String, ()> {
     }
 }
 
-async fn get_setkingoencypt_body(client: &mut Client, id: &str) -> Result<(String, String), ()> {
+async fn get_setkingoencypt_body(
+    client: &mut JxufeClient,
+    id: &str,
+) -> Result<(String, String), ()> {
     let url = format!(
         "https://jwxt.jxufe.edu.cn/custom/js/SetKingoEncypt.jsp?t={}",
         id
     );
-    let (_, body) = async_getwebpage(client, &url, None).await?;
+    let (_, body) = client.async_getwebpage(&url, None).await?;
     lazy_static! {
         //var _deskey = '6511675486548812258';
         // var _nowtime = '2023-02-04 12:55:48';
